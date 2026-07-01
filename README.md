@@ -11,7 +11,8 @@ Works around open-vm-tools [#510](https://github.com/vmware/open-vm-tools/issues
 
 ## How it works
 
-clipway adds a Wayland backend to open-vm-tools' `dndcp` plugin that reuses VMware's copy/paste GuestRPC protocol and drives the local clipboard via `wl-copy`/`wl-paste` (`wlr-data-control`, which works for a windowless daemon). It's picked at runtime when `WAYLAND_DISPLAY` is set, so one build serves both X11 and Wayland sessions.
+clipway adds a Wayland backend to open-vm-tools' `dndcp` plugin that reuses VMware's copy/paste GuestRPC protocol and drives the local clipboard via `wl-copy`/`wl-paste` (`wlr-data-control`, which works for a windowless daemon).
+It's picked at runtime when `WAYLAND_DISPLAY` is set, so one build serves both X11 and Wayland sessions.
 
 ## Requirements
 
@@ -37,7 +38,7 @@ clipway.nixosModules.default
 
 Applies the overlay (patching `open-vm-tools`) and runs the daemon as a `systemd --user` service bound to your compositor's session target. Overlay only, no service: `clipway.overlays.default`.
 
-## Other distros (untested, but should work)
+## Other distros
 
 ```sh
 cd open-vm-tools/
@@ -72,4 +73,4 @@ Lower-risk alternative: a network clipboard bridge (e.g. `wl-copy`/`wl-paste` ov
 
 ## License
 
-Nix glue (flake, module): **MIT**. The patch under `patches/` is a derivative of `open-vm-tools`, distributed under **LGPL-2.1** (inherited from upstream).
+Nix packaging (flake, module): **MIT**. The patch under `patches/` is a derivative of `open-vm-tools`, distributed under **LGPL-2.1** (inherited from upstream).
