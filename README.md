@@ -1,5 +1,7 @@
 # clipway
 
+[![nixpkgs-drift](https://github.com/krisztianfekete/clipway/actions/workflows/nixpkgs-drift.yml/badge.svg)](https://github.com/krisztianfekete/clipway/actions/workflows/nixpkgs-drift.yml)
+
 Host - guest clipboard for **wlroots** Wayland compositors (Sway, Hyprland, river, …) inside **VMware** guests.
 
 Stock `open-vm-tools` only ships an X11/GtkClipboard copy-paste backend, which can't work on Wayland (and Xwayland is often broken under `vmwgfx`), so host - guest clipboard is dead in wlroots sessions.
@@ -46,6 +48,14 @@ wl-copy "round trip" && wl-paste               # then paste on the host to check
 ```
 
 An `open-vm-tools` bump is the change most likely to break clipway: the patch touches `dndcp`'s `Makefile.am` and `copyPasteDnDWrapper.cpp`, so upstream edits to either need a rebase. Compositor upgrades are lower-risk, since clipway only needs *some* data-control protocol and `wl-clipboard` negotiates that.
+
+The first two steps are automated. CI evaluates `nix flake check` daily and builds the patch weekly against `nixos-25.11`, `nixos-26.05` and `nixos-unstable`, so an `open-vm-tools` bump shows up here before it reaches a release channel. You can run the same checks yourself against any channel:
+
+```sh
+nix flake check --override-input nixpkgs github:NixOS/nixpkgs/nixos-unstable
+```
+
+`checks.<system>.patch-target` fails when nixpkgs moves off the `open-vm-tools` release the patch targets. `checks.<system>.module-eval` evaluates a minimal VMware guest and pins the module's behaviour, including the headless split described above. Neither compiles anything, so both finish in seconds.
 
 ## Nix flake
 

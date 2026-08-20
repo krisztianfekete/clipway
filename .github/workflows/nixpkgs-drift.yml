@@ -1,0 +1,114 @@
+name: nixpkgs-drift
+
+# clipway pins a patch to one open-vm-tools release and a NixOS module to
+# nixpkgs option names. Both break from upstream movement, not from commits
+# here, so the interesting runs are the scheduled ones against floating
+# channels. Building the locked input would only re-verify a known store path.
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore: [ '**.md', 'LICENSE' ]
+  pull_request:
+    paths-ignore: [ '**.md', 'LICENSE' ]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * *'    # daily, evaluation only
+    - cron: '17 6 * * 1'    # Mondays, evaluation plus full source build
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.schedule || github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Cheap: compiles nothing. --all-systems forces the x86_64-linux assertions
+  # too, since every check assertion throws at evaluation time.
+  check:
+    name: eval ${{ matrix.channel }}
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [ nixos-25.11, nixos-26.05, nixos-unstable ]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - name: nix flake check
+        run: |
+          nix flake check --all-systems --no-write-lock-file --print-build-logs \
+            --override-input nixpkgs github:NixOS/nixpkgs/${{ matrix.channel }}
+
+  # Expensive: a from-source open-vm-tools build per channel. Skipped on the
+  # daily cron, kept on the weekly one and on real pushes.
+  build:
+    name: build ${{ matrix.channel }}
+    runs-on: ubuntu-24.04-arm
+    if: github.event_name != 'schedule' || github.event.schedule == '17 6 * * 1'
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [ nixos-25.11, nixos-26.05, nixos-unstable ]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - name: nix build
+        run: |
+          nix build --no-write-lock-file --print-build-logs \
+            --override-input nixpkgs github:NixOS/nixpkgs/${{ matrix.channel }} \
+            .#open-vm-tools
+
+  # A red scheduled run on a quiet repo is easy to miss, so turn it into an
+  # issue. Only for schedules: on a push or PR the author already sees the X.
+  # always() is required because `build` is deliberately skipped on the daily
+  # cron, and a skipped dependency would otherwise skip this job too.
+  report:
+    name: report breakage
+    needs: [ check, build ]
+    runs-on: ubuntu-24.04
+    if: >-
+      always() && github.event_name == 'schedule' &&
+      (needs.check.result == 'failure' || needs.build.result == 'failure')
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update the breakage issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVAL_RESULT: ${{ needs.check.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          set -euo pipefail
+          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          body=$(cat <<EOF
+          A scheduled nixpkgs-drift run failed.
+
+          Run: $url
+
+          - eval: $EVAL_RESULT
+          - build: $BUILD_RESULT
+
+          See the run for the affected channels. A version bump means rebasing
+          \`patches/0001-dndcp-wayland-clipboard-backend.patch\` and updating
+          \`patchTargetVersion\` in \`flake.nix\`.
+          EOF
+          )
+
+          # Idempotent, so a first failure does not need any manual setup.
+          gh label create ci-breakage --repo "$GITHUB_REPOSITORY" \
+            --description "Scheduled CI found nixpkgs drift" --color B60205 || true
+
+          # The label is dedicated to this job, so it is the dedup key. Avoids
+          # quoting a title into the search syntax.
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --label ci-breakage \
+                  --state open --limit 1 --json number --jq '.[0].number // empty')
+
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --label ci-breakage \
+              --title 'CI: nixpkgs drift broke clipway' --body "$body"
+          fi
