@@ -2,7 +2,7 @@
   description =
     "clipway, a host <-> guest clipboard for wlroots Wayland compositors (Sway, Hyprland, river, …) in VMware guests, via a Wayland backend for open-vm-tools (wlr-data-control / wl-clipboard). Works around open-vm-tools issues #510 and #792.";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
   outputs = { self, nixpkgs }:
     let

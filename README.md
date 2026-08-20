@@ -17,10 +17,35 @@ It's picked at runtime when `WAYLAND_DISPLAY` is set, so one build serves both X
 ## Requirements
 
 - A VMware guest with copy/paste enabled and the system `vmtoolsd` running (i.e. stock `open-vm-tools` working). Developed against **VMware Fusion** on Apple Silicon; other VMware products untested.
-- A **`wlr-data-control`** compositor — Sway, Hyprland, river, … GNOME (Mutter) won't work; KDE/KWin untested.
-- **`wl-clipboard`** (`wl-copy`/`wl-paste`) on `PATH`, the backend shells out to it. The NixOS module wires this in.
+- A compositor speaking a **data-control** protocol, either `ext-data-control-v1` or the older `wlr-data-control`. Sway, Hyprland, river, … GNOME (Mutter) won't work; KDE/KWin untested. Broadening this from `wlr-data-control` alone is what makes non-wlroots compositors plausible, but nothing outside wlroots has been tried.
+- **`wl-clipboard`** (`wl-copy`/`wl-paste`) on `PATH`, the backend shells out to it. The NixOS module wires this in. `wl-clipboard` 2.3.0 speaks both data-control protocols and picks whichever the compositor offers, so clipway doesn't care which one you have.
 - The desktop daemon `vmtoolsd -n vmusr` must run **inside** the Wayland session (stock packaging only starts it for X11). The module handles this.
-- `open-vm-tools` built **from source** with the patch. Pinned to **13.0.5 / nixpkgs 25.11**; other versions likely need a rebase.
+- `open-vm-tools` built **from source** with the patch. The patch targets the **13.0.5** source layout; other `open-vm-tools` versions likely need a rebase. It is *not* tied to a nixpkgs release; see [Verified versions](#verified-versions).
+
+## Verified versions
+
+Re-verified after each upgrade; everything not listed is expected-to-work but untested.
+
+| | Initial (2026-06) | Current (2026-08) |
+| --- | --- | --- |
+| NixOS / nixpkgs | 25.11 | **26.05** |
+| `open-vm-tools` | 13.0.5 | 13.0.5 (unchanged) |
+| Sway / wlroots | 1.11 / 0.19.2 | **1.12 / 0.20.0** |
+| `wl-clipboard` | 2.3.0 | 2.3.0 (unchanged) |
+| Host | VMware Fusion Professional 25H2 (24995814), aarch64 | unchanged |
+
+The NixOS 25.11 → 26.05 upgrade needed **no patch changes**: `open-vm-tools` is still 13.0.5 in 26.05, and wlroots 0.20 still ships `wlr-data-control` alongside the newer `ext-data-control-v1`.
+
+### Re-verifying after an upgrade
+
+```sh
+nix eval --raw nixpkgs#open-vm-tools.version   # still 13.0.5? if not, the patch needs a rebase
+nix build github:krisztianfekete/clipway       # does the patch still apply and build?
+systemctl --user status clipway                # daemon up in the new session?
+wl-copy "round trip" && wl-paste               # then paste on the host to check both directions
+```
+
+An `open-vm-tools` bump is the change most likely to break clipway: the patch touches `dndcp`'s `Makefile.am` and `copyPasteDnDWrapper.cpp`, so upstream edits to either need a rebase. Compositor upgrades are lower-risk, since clipway only needs *some* data-control protocol and `wl-clipboard` negotiates that.
 
 ## Nix flake
 
@@ -38,6 +63,11 @@ clipway.nixosModules.default
 
 Applies the overlay (patching `open-vm-tools`) and runs the daemon as a `systemd --user` service bound to your compositor's session target. Overlay only, no service: `clipway.overlays.default`.
 
+**You don't have to match clipway's nixpkgs.** The overlay patches *your* `open-vm-tools` (`prev.open-vm-tools`), so what matters is the `open-vm-tools` version in your nixpkgs, not clipway's. Clipway's own `nixpkgs` input only backs the `packages` output (`nix build`, cache population). It currently tracks `nixos-26.05`; consuming clipway from a 25.11 or unstable system is fine as long as `open-vm-tools` is 13.0.5.
+
+> [!NOTE]
+> **Headless guests.** nixpkgs' `virtualisation.vmware.guest.headless` defaults to `!config.services.xserver.enable`, so a pure-Wayland guest gets `headless = true` and the *system* `vmtoolsd` becomes `open-vm-tools-headless`. That build passes `--without-x`, and `dndcp` is gated behind `HAVE_GTKMM` (which requires X), so the headless package contains **no clipboard plugin at all**; the `vmblock` mount and the suid wrapper are skipped too. `services.clipway.package` defaults to `pkgs.open-vm-tools` (patched, X-enabled) regardless, so the clipway daemon itself is unaffected, but this combination is untested. If clipboard doesn't come up on an X-less guest, set `virtualisation.vmware.guest.headless = false`.
+
 ## Other distros
 
 ```sh
@@ -50,10 +80,10 @@ XDG_SESSION_TYPE=wayland vmtoolsd -n vmusr
 ## Limitations
 
 - **Plain UTF-8 text only** — no images, RTF/HTML, files, or drag-and-drop. Large selections (over the V3 protocol limit) are dropped.
-- **`wlr-data-control` compositors only** (not GNOME; KDE untested).
+- **Data-control compositors only** (`ext-data-control-v1` or `wlr-data-control`). Not GNOME; KDE untested.
 - Shells out to `wl-clipboard` (no native libwayland client), so it's a hard runtime dependency.
 - Pinned to one `open-vm-tools` version; needs rebasing on upgrades and forces a from-source build.
-- Verified only on Sway 1.11 / wlroots 0.19.2, VMware Fusion (Professional 25H2 (24995814)), aarch64. Everything else is expected-to-work but unverified.
+- Only the versions in [Verified versions](#verified-versions) are tested. Everything else is expected-to-work but unverified.
 
 ## Contributing upstream
 
