@@ -34,11 +34,11 @@ New files:
 ---
  services/plugins/dndcp/Makefile.am            |   2 +
  .../plugins/dndcp/copyPasteDnDWayland.cpp     | 298 ++++++++++++
- services/plugins/dndcp/copyPasteUIWayland.cpp | 407 +++++++++++++++++
+ services/plugins/dndcp/copyPasteUIWayland.cpp | 417 +++++++++++++++++
  services/plugins/dndcp/copyPasteUIWayland.h   |  73 +++
  .../dndcp/dndGuestBase/copyPasteDnDWayland.h  |  58 +++
  .../dndGuestBase/copyPasteDnDWrapper.cpp      |  20 +-
- 6 files changed, 857 insertions(+), 1 deletion(-)
+ 6 files changed, 867 insertions(+), 1 deletion(-)
  create mode 100644 services/plugins/dndcp/copyPasteDnDWayland.cpp
  create mode 100644 services/plugins/dndcp/copyPasteUIWayland.cpp
  create mode 100644 services/plugins/dndcp/copyPasteUIWayland.h
@@ -366,7 +366,7 @@ new file mode 100644
 index 0000000..4013751
 --- /dev/null
 +++ b/services/plugins/dndcp/copyPasteUIWayland.cpp
-@@ -0,0 +1,407 @@
+@@ -0,0 +1,417 @@
 +/*********************************************************
 + * Copyright (C) 2026 VMware, Inc. All rights reserved.
 + *
@@ -715,6 +715,15 @@ index 0000000..4013751
 +   CPClipboard_Clear(&mClipboard);
 +
 +   text = CopyPasteWaylandGetText(&len);
++
++   /*
++    * Upstream detects change via a signal: the X selection timestamp in the
++    * GTK3 backend, a generation counter driven off signal_changed() in the
++    * GTK4 one. We have no such signal here, so compare content instead.
++    * Consequence: recopying the same text reads as unchanged. Replace this
++    * with wl-paste --watch driving a generation counter when the backend is
++    * rebased onto open-vm-tools 13.1.0 or later.
++    */
 +   std::string currentText(text != NULL ? text : "", len);
 +   if (currentText == mLastClipboardText) {
 +      g_debug("%s: local clipboard is unchanged\n", __FUNCTION__);
@@ -764,6 +773,7 @@ index 0000000..4013751
 + *
 + *-----------------------------------------------------------------------------
 + */
++
 +void
 +CopyPasteUIWayland::SendClipNotChanged(void)
 +{
