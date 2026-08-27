@@ -34,11 +34,11 @@ New files:
 ---
  services/plugins/dndcp/Makefile.am            |   2 +
  .../plugins/dndcp/copyPasteDnDWayland.cpp     | 298 ++++++++++++
- services/plugins/dndcp/copyPasteUIWayland.cpp | 432 ++++++++++++++++++
- services/plugins/dndcp/copyPasteUIWayland.h   |  74 +++
+ services/plugins/dndcp/copyPasteUIWayland.cpp | 407 +++++++++++++++++
+ services/plugins/dndcp/copyPasteUIWayland.h   |  73 +++
  .../dndcp/dndGuestBase/copyPasteDnDWayland.h  |  58 +++
  .../dndGuestBase/copyPasteDnDWrapper.cpp      |  20 +-
- 6 files changed, 883 insertions(+), 1 deletion(-)
+ 6 files changed, 857 insertions(+), 1 deletion(-)
  create mode 100644 services/plugins/dndcp/copyPasteDnDWayland.cpp
  create mode 100644 services/plugins/dndcp/copyPasteUIWayland.cpp
  create mode 100644 services/plugins/dndcp/copyPasteUIWayland.h
@@ -363,10 +363,10 @@ index 0000000..9653e85
 +}
 diff --git a/services/plugins/dndcp/copyPasteUIWayland.cpp b/services/plugins/dndcp/copyPasteUIWayland.cpp
 new file mode 100644
-index 0000000..2c5f13f
+index 0000000..4013751
 --- /dev/null
 +++ b/services/plugins/dndcp/copyPasteUIWayland.cpp
-@@ -0,0 +1,432 @@
+@@ -0,0 +1,407 @@
 +/*********************************************************
 + * Copyright (C) 2026 VMware, Inc. All rights reserved.
 + *
@@ -473,6 +473,7 @@ index 0000000..2c5f13f
 +   /* Closing stdin is the EOF that lets wl-copy install the selection. */
 +   close(stdinFd);
 +
++   /* Wait for wl-copy to install the selection before it can be reread. */
 +   gint status = 0;
 +   pid_t waited;
 +   do {
@@ -486,35 +487,6 @@ index 0000000..2c5f13f
 +      return false;
 +   }
 +   return success && WIFEXITED(status) && WEXITSTATUS(status) == 0;
-+}
-+
-+
-+/*
-+ *-----------------------------------------------------------------------------
-+ *
-+ * CopyPasteWaylandClear --
-+ *
-+ *    Clear the local Wayland clipboard synchronously.
-+ *
-+ *-----------------------------------------------------------------------------
-+ */
-+
-+static bool
-+CopyPasteWaylandClear(void)
-+{
-+   const gchar *argv[] = { "wl-copy", "--clear", NULL };
-+   gint status = 0;
-+   GError *err = NULL;
-+
-+   if (!g_spawn_sync(NULL, (gchar **) argv, NULL,
-+                     (GSpawnFlags) G_SPAWN_SEARCH_PATH,
-+                     NULL, NULL, NULL, NULL, &status, &err)) {
-+      g_warning("%s: failed to spawn wl-copy --clear: %s\n", __FUNCTION__,
-+                err != NULL ? err->message : "unknown error");
-+      g_clear_error(&err);
-+      return false;
-+   }
-+   return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 +}
 +
 +
@@ -583,7 +555,6 @@ index 0000000..2c5f13f
 +
 +CopyPasteUIWayland::CopyPasteUIWayland()
 + : mCP(NULL),
-+   mHaveLastClipboardText(false),
 +   mInited(false)
 +{
 +   GuestDnDCPMgr *p = GuestDnDCPMgr::GetInstance();
@@ -637,7 +608,6 @@ index 0000000..2c5f13f
 +   gsize len = 0;
 +   gchar *text = CopyPasteWaylandGetText(&len);
 +   mLastClipboardText.assign(text != NULL ? text : "", len);
-+   mHaveLastClipboardText = true;
 +   g_free(text);
 +
 +   mCP->srcRecvClipChanged.connect(
@@ -708,15 +678,10 @@ index 0000000..2c5f13f
 +              __FUNCTION__, len);
 +      if (CopyPasteWaylandSetText(text, len)) {
 +         mLastClipboardText.assign(text, len);
-+         mHaveLastClipboardText = true;
 +      }
 +   } else {
-+      g_debug("%s: clearing local clipboard; remote has no text item\n",
++      g_debug("%s: no text item in remote clipboard (text-only backend)\n",
 +              __FUNCTION__);
-+      if (CopyPasteWaylandClear()) {
-+         mLastClipboardText.clear();
-+         mHaveLastClipboardText = true;
-+      }
 +   }
 +}
 +
@@ -751,14 +716,13 @@ index 0000000..2c5f13f
 +
 +   text = CopyPasteWaylandGetText(&len);
 +   std::string currentText(text != NULL ? text : "", len);
-+   if (mHaveLastClipboardText && currentText == mLastClipboardText) {
++   if (currentText == mLastClipboardText) {
 +      g_debug("%s: local clipboard is unchanged\n", __FUNCTION__);
 +      g_free(text);
 +      SendClipNotChanged();
 +      return;
 +   }
 +   mLastClipboardText = currentText;
-+   mHaveLastClipboardText = true;
 +
 +   if (text != NULL && len > 0) {
 +      if (!mCP->CheckCapability(DND_CP_CAP_PLAIN_TEXT_CP)) {
@@ -786,8 +750,19 @@ index 0000000..2c5f13f
 +
 +
 +/*
-+ * Send the protocol's explicit unchanged response. This is what prevents a
-+ * stale guest clipboard from replacing a newer host clipboard on focus.
++ *-----------------------------------------------------------------------------
++ *
++ * CopyPasteUIWayland::SendClipNotChanged --
++ *
++ *    Send a not-changed clip to host.
++ *
++ * Results:
++ *    None.
++ *
++ * Side effects:
++ *    None.
++ *
++ *-----------------------------------------------------------------------------
 + */
 +void
 +CopyPasteUIWayland::SendClipNotChanged(void)
@@ -801,10 +776,10 @@ index 0000000..2c5f13f
 +}
 diff --git a/services/plugins/dndcp/copyPasteUIWayland.h b/services/plugins/dndcp/copyPasteUIWayland.h
 new file mode 100644
-index 0000000..1a80701
+index 0000000..2570106
 --- /dev/null
 +++ b/services/plugins/dndcp/copyPasteUIWayland.h
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,73 @@
 +/*********************************************************
 + * Copyright (C) 2026 VMware, Inc. All rights reserved.
 + *
@@ -874,7 +849,6 @@ index 0000000..1a80701
 +   GuestCopyPasteMgr *mCP;
 +   CPClipboard mClipboard;
 +   std::string mLastClipboardText;
-+   bool mHaveLastClipboardText;
 +   bool mInited;
 +};
 +
