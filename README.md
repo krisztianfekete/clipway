@@ -75,6 +75,14 @@ Applies the overlay (patching `open-vm-tools`) and runs the daemon as a `systemd
 
 **You don't have to match clipway's nixpkgs.** The overlay patches *your* `open-vm-tools` (`prev.open-vm-tools`), so what matters is the `open-vm-tools` version in your nixpkgs, not clipway's. Clipway's own `nixpkgs` input only backs the `packages` output (`nix build`, cache population). It currently tracks `nixos-26.05`; consuming clipway from a 25.11 or unstable system is fine as long as `open-vm-tools` is 13.0.5.
 
+**Pinning a release.** The URL above follows `main`, and your `flake.lock` pins a revision either way, so tags aren't needed for reproducibility. They exist for the case where `main` rebases the patch onto a newer `open-vm-tools` before your channel gets there:
+
+```nix
+inputs.clipway.url = "github:krisztianfekete/clipway/v0.1.0";
+```
+
+Every [release](https://github.com/krisztianfekete/clipway/releases) states the `open-vm-tools` version its patch targets, so a pinned tag keeps you on a patch that matches your nixpkgs. Releases are cut when something consumer-visible changes: a patch rebase, a `services.clipway.*` option change, or a new [verified version](#verified-versions).
+
 > [!NOTE]
 > **Headless guests.** nixpkgs' `virtualisation.vmware.guest.headless` defaults to `!config.services.xserver.enable`, so a pure-Wayland guest gets `headless = true` and the *system* `vmtoolsd` becomes `open-vm-tools-headless`. That build passes `--without-x`, and `dndcp` is gated behind `HAVE_GTKMM` (which requires X), so the headless package contains **no clipboard plugin at all**; the `vmblock` mount and the suid wrapper are skipped too. `services.clipway.package` defaults to `pkgs.open-vm-tools` (patched, X-enabled) regardless, so the clipway daemon itself is unaffected, but this combination is untested. If clipboard doesn't come up on an X-less guest, set `virtualisation.vmware.guest.headless = false`.
 
