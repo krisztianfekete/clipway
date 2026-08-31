@@ -45,18 +45,18 @@ New files:
  create mode 100644 services/plugins/dndcp/dndGuestBase/copyPasteDnDWayland.h
 
 diff --git a/services/plugins/dndcp/Makefile.am b/services/plugins/dndcp/Makefile.am
-index 1b0b8b8..e1f5458 100644
 --- a/services/plugins/dndcp/Makefile.am
 +++ b/services/plugins/dndcp/Makefile.am
-@@ -90,6 +90,8 @@ libdndcp_la_SOURCES += copyPasteCompatX11.c
- libdndcp_la_SOURCES += vmCopyPasteDnDWrapper.cpp
- libdndcp_la_SOURCES += copyPasteDnDX11.cpp
- libdndcp_la_SOURCES += copyPasteUIX11.cpp
+@@ -98,4 +98,9 @@
++# The Wayland clipboard backend shells out to wl-clipboard and links no Gtk,
++# so it is built in every configuration, including HAVE_GTK4.
 +libdndcp_la_SOURCES += copyPasteDnDWayland.cpp
 +libdndcp_la_SOURCES += copyPasteUIWayland.cpp
- libdndcp_la_SOURCES += dndUIX11.cpp
- libdndcp_la_SOURCES += dndcp.cpp
- libdndcp_la_SOURCES += dragDetWndX11.cpp
++
+ if LINUX
+ libdndcp_la_CPPFLAGS += -I$(top_srcdir)/services/plugins/dndcp/fakeMouse
+ libdndcp_la_SOURCES  += fakeMouseWayland/fakeMouseWayland.cpp
+ libdndcp_la_CPPFLAGS += -DUSE_UINPUT
 diff --git a/services/plugins/dndcp/copyPasteDnDWayland.cpp b/services/plugins/dndcp/copyPasteDnDWayland.cpp
 new file mode 100644
 index 0000000..9653e85
