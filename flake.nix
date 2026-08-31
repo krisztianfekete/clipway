@@ -11,10 +11,13 @@
       patch = ./patches/0001-dndcp-wayland-clipboard-backend.patch;
       patchName = baseNameOf (toString patch);
 
-      # The open-vm-tools release the patch is rebased against. If nixpkgs moves
-      # off this the patch needs rebasing; checks.<system>.patch-target enforces
-      # it, including against floating channels via --override-input.
-      patchTargetVersion = "13.0.5";
+      # The open-vm-tools releases the patch applies to. It anchors its
+      # Makefile.am hunk on the `if LINUX` block, which these releases share
+      # verbatim, so one patch spans the 13.1.0 reshuffle of the source list
+      # into HAVE_GTK4 branches. If nixpkgs moves off every version listed here
+      # the patch needs rebasing; checks.<system>.patch-target enforces it,
+      # including against floating channels via --override-input.
+      patchTargetVersions = [ "13.0.5" "13.1.0" ];
     in
     {
       # Patch open-vm-tools with the Wayland clipboard backend.
@@ -99,10 +102,11 @@
         {
           patch-target = report "clipway-patch-target" [
             {
-              name = "nixpkgs open-vm-tools is ${patchTargetVersion}"
+              name = "nixpkgs open-vm-tools is one of"
+                + " ${lib.concatStringsSep ", " patchTargetVersions}"
                 + " (got ${pkgs.open-vm-tools.version};"
-                + " if this fails, rebase ${patchName} and bump patchTargetVersion)";
-              ok = pkgs.open-vm-tools.version == patchTargetVersion;
+                + " if this fails, rebase ${patchName} and update patchTargetVersions)";
+              ok = builtins.elem pkgs.open-vm-tools.version patchTargetVersions;
             }
           ];
 
