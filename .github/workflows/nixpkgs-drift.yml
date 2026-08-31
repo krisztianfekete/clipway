@@ -60,6 +60,19 @@ jobs:
             --override-input nixpkgs github:NixOS/nixpkgs/${{ matrix.channel }} \
             .#open-vm-tools
 
+      # A patch can apply and still not reach the build. GNU patch defaults to
+      # fuzz 2, so an upstream reshuffle can silently relocate the Makefile.am
+      # hunk into a conditional that is not taken, dropping the Wayland backend
+      # while everything still compiles and installs. Assert on the artifact.
+      - name: Wayland backend is in libdndcp.so
+        run: |
+          set -euo pipefail
+          so=result/lib/open-vm-tools/plugins/vmusr/libdndcp.so
+          test -f "$so" || { echo "missing $so"; exit 1; }
+          grep -qa 'Wayland session detected' "$so" \
+            || { echo "FAIL: dndcp built without the Wayland clipboard backend"; exit 1; }
+          echo "ok  Wayland clipboard backend present in $so"
+
   # A red scheduled run on a quiet repo is easy to miss, so turn it into an
   # issue. Only for schedules: on a push or PR the author already sees the X.
   # always() is required because `build` is deliberately skipped on the daily
