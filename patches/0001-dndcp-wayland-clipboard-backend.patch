@@ -26,6 +26,12 @@ Scope: plain UTF-8 text only (no images, RTF, or drag-and-drop). The MVP
 shells out to wl-clipboard and therefore needs no new build dependencies
 (no libwayland, no wayland-scanner).
 
+Guest clipboard changes are detected by comparing against the last text
+recorded. Text is recorded only once the host was given it, or when it can
+never be sent (invalid UTF-8, too large). A transient rejection (plain text
+not in the negotiated caps, a failed clip allocation) is not recorded, so
+the next host request retries it instead of reporting it unchanged.
+
 New files:
   services/plugins/dndcp/copyPasteUIWayland.h
   services/plugins/dndcp/copyPasteUIWayland.cpp
@@ -34,11 +40,11 @@ New files:
 ---
  services/plugins/dndcp/Makefile.am            |   2 +
  .../plugins/dndcp/copyPasteDnDWayland.cpp     | 298 ++++++++++++
- services/plugins/dndcp/copyPasteUIWayland.cpp | 417 +++++++++++++++++
+ services/plugins/dndcp/copyPasteUIWayland.cpp | 431 +++++++++++++++++
  services/plugins/dndcp/copyPasteUIWayland.h   |  73 +++
  .../dndcp/dndGuestBase/copyPasteDnDWayland.h  |  58 +++
  .../dndGuestBase/copyPasteDnDWrapper.cpp      |  20 +-
- 6 files changed, 867 insertions(+), 1 deletion(-)
+ 6 files changed, 881 insertions(+), 1 deletion(-)
  create mode 100644 services/plugins/dndcp/copyPasteDnDWayland.cpp
  create mode 100644 services/plugins/dndcp/copyPasteUIWayland.cpp
  create mode 100644 services/plugins/dndcp/copyPasteUIWayland.h
@@ -363,10 +369,10 @@ index 0000000..9653e85
 +}
 diff --git a/services/plugins/dndcp/copyPasteUIWayland.cpp b/services/plugins/dndcp/copyPasteUIWayland.cpp
 new file mode 100644
-index 0000000..4013751
+index 0000000..e61f6a5
 --- /dev/null
 +++ b/services/plugins/dndcp/copyPasteUIWayland.cpp
-@@ -0,0 +1,417 @@
+@@ -0,0 +1,431 @@
 +/*********************************************************
 + * Copyright (C) 2026 VMware, Inc. All rights reserved.
 + *
@@ -704,6 +710,7 @@ index 0000000..4013751
 +   gsize len = 0;
 +   gchar *text;
 +   bool validDataInClip = false;
++   bool retryable = false;
 +
 +   g_debug("%s: enter.\n", __FUNCTION__);
 +
@@ -731,11 +738,11 @@ index 0000000..4013751
 +      SendClipNotChanged();
 +      return;
 +   }
-+   mLastClipboardText = currentText;
 +
 +   if (text != NULL && len > 0) {
 +      if (!mCP->CheckCapability(DND_CP_CAP_PLAIN_TEXT_CP)) {
 +         g_debug("%s: plain text copy/paste not in caps\n", __FUNCTION__);
++         retryable = true;
 +      } else if (!g_utf8_validate(text, len, NULL)) {
 +         g_debug("%s: clipboard data is not valid UTF-8 text, skipping\n",
 +                 __FUNCTION__);
@@ -745,9 +752,22 @@ index 0000000..4013751
 +      } else if (CPClipboard_SetItem(&mClipboard, CPFORMAT_TEXT, text, len + 1)) {
 +         validDataInClip = true;
 +         g_debug("%s: got %" G_GSIZE_FORMAT " bytes of text\n", __FUNCTION__, len);
++      } else {
++         g_debug("%s: failed to add text to clip\n", __FUNCTION__);
++         retryable = true;
 +      }
 +   }
 +   g_free(text);
++
++   /*
++    * Record only what the host was actually given, or text that can never be
++    * sent (invalid UTF-8, too large). A transient rejection must not be
++    * recorded: the text would then read as unchanged on every later request
++    * and could never be copied until the clipboard changed.
++    */
++   if (!retryable) {
++      mLastClipboardText = currentText;
++   }
 +
 +   if (validDataInClip) {
 +      mCP->DestUISendClip(&mClipboard);
