@@ -13,6 +13,8 @@ Stock `open-vm-tools` only has an X11 clipboard backend, so copy and paste betwe
 
 A patch adds a Wayland backend to the `dndcp` plugin of `open-vm-tools`. It keeps VMware's copy/paste protocol and reads and writes the guest clipboard with `wl-copy`/`wl-paste`, which work for a windowless daemon through the data-control protocols. The backend is chosen at runtime when `WAYLAND_DISPLAY` is set, so one build serves X11 and Wayland sessions.
 
+The daemon loads only the `dndcp` plugin and runs without `DISPLAY`, so it never connects to X. The stock `vmusr` plugins (`desktopEvents`, `resolutionSet`) need an X server, which under Wayland means XWayland, and `desktopEvents` exits the whole daemon when that server dies. Keeping them out means an XWayland crash can no longer take the clipboard down.
+
 ## Requirements
 
 - A VMware guest with copy/paste enabled. Developed on VMware Fusion (Apple Silicon); other products are untested.
@@ -47,9 +49,13 @@ Following `main` is normally fine. Each [release](https://github.com/krisztianfe
 ```sh
 cd open-vm-tools/
 patch -p1 < patches/0001-dndcp-wayland-clipboard-backend.patch
-# build as usual, then inside your Wayland session:
-XDG_SESSION_TYPE=wayland vmtoolsd -n vmusr
+# build as usual, then inside your Wayland session load dndcp alone:
+mkdir -p ~/.local/lib/clipway
+ln -sf /usr/lib/open-vm-tools/plugins/vmusr/libdndcp.so ~/.local/lib/clipway/
+env -u DISPLAY XDG_SESSION_TYPE=wayland vmtoolsd -n vmusr --plugin-path ~/.local/lib/clipway
 ```
+
+The plugin directory differs between distros (Debian uses `/usr/lib/<triplet>/open-vm-tools`), so adjust the `ln` source to match.
 
 On Arch there is an AUR package, [open-vm-tools-clipway](https://aur.archlinux.org/packages/open-vm-tools-clipway), maintained by someone else.
 

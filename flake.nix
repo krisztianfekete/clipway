@@ -125,6 +125,15 @@
                 waylandOnly.systemd.user.services.clipway.path;
             }
             {
+              name = "clipway daemon loads only dndcp, so it never connects to X";
+              ok = lib.hasInfix "--plugin-path"
+                waylandOnly.systemd.user.services.clipway.serviceConfig.ExecStart;
+            }
+            {
+              name = "clipway unit unsets DISPLAY";
+              ok = waylandOnly.systemd.user.services.clipway.serviceConfig.UnsetEnvironment == "DISPLAY";
+            }
+            {
               name = "clipway unit is bound to services.clipway.target";
               ok = waylandOnly.systemd.user.services.clipway.wantedBy == [ "sway-session.target" ];
             }

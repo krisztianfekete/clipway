@@ -3,6 +3,18 @@ self:
 
 let
   cfg = config.services.clipway;
+
+  # vmtoolsd loads every plugin in its vmusr directory. Only dndcp is needed:
+  # desktopEvents and resolutionSet are X11 only, and desktopEvents installs
+  # an X I/O error handler that exits the daemon whenever its X server dies.
+  # Under Wayland that server is XWayland, which nothing else may be keeping
+  # alive, so a crash there would silently take the clipboard down with it.
+  vmusrPlugins = pkgs.runCommand "clipway-vmusr-plugins" { } ''
+    so=${cfg.package}/lib/open-vm-tools/plugins/vmusr/libdndcp.so
+    test -e "$so" || { echo "clipway: $so not found" >&2; exit 1; }
+    mkdir -p $out
+    ln -s "$so" $out/
+  '';
 in
 {
   options.services.clipway = {
@@ -39,6 +51,7 @@ in
     # commands, so a Wayland session never gets the desktop (clipboard) daemon.
     # Run it here. The patched backend is selected because XDG_SESSION_TYPE is
     # wayland; wl-clipboard provides the wl-copy/wl-paste it shells out to.
+    # Loading dndcp alone with DISPLAY unset keeps the daemon off X entirely.
     systemd.user.services.clipway = {
       description = "clipway — open-vm-tools desktop daemon (Wayland clipboard backend)";
       wantedBy = [ cfg.target ];
@@ -47,7 +60,8 @@ in
       serviceConfig = {
         Type = "simple";
         Environment = "XDG_SESSION_TYPE=wayland";
-        ExecStart = "${cfg.package}/bin/vmtoolsd -n vmusr";
+        UnsetEnvironment = "DISPLAY";
+        ExecStart = "${cfg.package}/bin/vmtoolsd -n vmusr --plugin-path ${vmusrPlugins}";
         Restart = "on-failure";
         RestartSec = 2;
       };
