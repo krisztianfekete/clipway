@@ -135,7 +135,15 @@
             }
             {
               name = "clipway unit is bound to services.clipway.target";
-              ok = waylandOnly.systemd.user.services.clipway.wantedBy == [ "sway-session.target" ];
+              ok = waylandOnly.systemd.user.services.clipway.wantedBy == [ "graphical-session.target" ];
+            }
+            {
+              name = "clipway unit only starts in a Wayland session";
+              ok = waylandOnly.systemd.user.services.clipway.unitConfig.ConditionEnvironment == "WAYLAND_DISPLAY";
+            }
+            {
+              name = "stock vmware-user XDG autostart entry is hidden";
+              ok = lib.hasInfix "Hidden=true" waylandOnly.environment.etc."xdg/autostart/vmware-user.desktop".text;
             }
             {
               name = "wayland-only guest still defaults headless to true";

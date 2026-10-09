@@ -26,12 +26,14 @@ in
 
     target = lib.mkOption {
       type = lib.types.str;
-      default = "sway-session.target";
-      example = "hyprland-session.target";
+      default = "graphical-session.target";
+      example = "sway-session.target";
       description = ''
         The systemd --user target that starts (and stops) the clipboard
         daemon. Use the session target your compositor reaches once
         WAYLAND_DISPLAY has been imported into the user systemd environment.
+        Compositor specific targets such as sway-session.target bind to
+        graphical-session.target, so the default covers most setups.
       '';
     };
 
@@ -57,6 +59,9 @@ in
       wantedBy = [ cfg.target ];
       after = [ cfg.target ];
       path = [ pkgs.wl-clipboard ];
+      # graphical-session.target is reached by X11 sessions too, where the
+      # stock daemon from the session commands already runs. Stay out of those.
+      unitConfig.ConditionEnvironment = "WAYLAND_DISPLAY";
       serviceConfig = {
         Type = "simple";
         Environment = "XDG_SESSION_TYPE=wayland";
