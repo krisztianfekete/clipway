@@ -2,7 +2,7 @@
 
 [![nixpkgs-drift](https://github.com/krisztianfekete/clipway/actions/workflows/nixpkgs-drift.yml/badge.svg)](https://github.com/krisztianfekete/clipway/actions/workflows/nixpkgs-drift.yml)
 
-Host/guest clipboard for wlroots Wayland compositors (Sway, Hyprland, river) inside VMware guests.
+Host/guest clipboard for Wayland compositors with data-control support (Sway, Hyprland, river, KDE Plasma) inside VMware guests.
 
 Stock `open-vm-tools` only has an X11 clipboard backend, so copy and paste between host and guest doesn't work in a wlroots session. This is a workaround for open-vm-tools [#510](https://github.com/vmware/open-vm-tools/issues/510) and [#792](https://github.com/vmware/open-vm-tools/issues/792).
 
@@ -18,7 +18,7 @@ The daemon loads only the `dndcp` plugin and runs without `DISPLAY`, so it never
 ## Requirements
 
 - A VMware guest with copy/paste enabled. Developed on VMware Fusion (Apple Silicon); other products are untested.
-- A compositor with `ext-data-control-v1` or `wlr-data-control`. GNOME won't work; KDE is untested.
+- A compositor with `ext-data-control-v1` or `wlr-data-control`. GNOME won't work. KDE Plasma 6 has been [reported working](https://github.com/krisztianfekete/clipway/issues/6).
 - `wl-clipboard` on `PATH`.
 - `vmtoolsd -n vmusr` running inside the Wayland session. Stock packaging only starts it for X11; the NixOS module handles this.
 - `open-vm-tools` 13.0.5 or 13.1.0 built from source with the patch.
@@ -34,10 +34,11 @@ clipway.nixosModules.default
   virtualisation.vmware.guest.enable = true;
   services.clipway.enable = true;
   # not Sway? services.clipway.target = "hyprland-session.target";
+  # KDE Plasma: services.clipway.target = "plasma-workspace-wayland.target";
 }
 ```
 
-The module patches your own `open-vm-tools` through an overlay and runs the daemon as a user service bound to the compositor's session target. For the overlay alone, use `clipway.overlays.default`. Your nixpkgs does not have to match clipway's; it only needs to ship one of the supported `open-vm-tools` versions.
+The module patches your own `open-vm-tools` through an overlay and runs the daemon as a user service bound to the compositor's session target. It also hides the `vmware-user` XDG autostart entry that `open-vm-tools` ships, so desktops that run autostart entries (KDE Plasma) don't start a second, stock daemon next to it. For the overlay alone, use `clipway.overlays.default`. Your nixpkgs does not have to match clipway's; it only needs to ship one of the supported `open-vm-tools` versions.
 
 Following `main` is normally fine. Each [release](https://github.com/krisztianfekete/clipway/releases) lists the `open-vm-tools` versions it supports, so pin a tag (`github:krisztianfekete/clipway/v0.1.2`) if `main` ever drops the version your channel ships.
 

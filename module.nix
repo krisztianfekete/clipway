@@ -66,5 +66,16 @@ in
         RestartSec = 2;
       };
     };
+
+    # open-vm-tools also ships an XDG autostart entry for vmware-user-suid-wrapper.
+    # Desktops that honour XDG autostart (KDE Plasma) would start a second,
+    # stock vmusr daemon next to ours, with every plugin loaded and DISPLAY set.
+    # /etc/xdg comes first in XDG_CONFIG_DIRS, so this hides the packaged entry.
+    environment.etc."xdg/autostart/vmware-user.desktop".text = lib.mkDefault ''
+      [Desktop Entry]
+      Type=Application
+      Name=VMware User Agent
+      Hidden=true
+    '';
   };
 }
