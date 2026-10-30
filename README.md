@@ -57,7 +57,18 @@ env -u DISPLAY XDG_SESSION_TYPE=wayland vmtoolsd -n vmusr --plugin-path ~/.local
 
 The plugin directory differs between distros (Debian uses `/usr/lib/<triplet>/open-vm-tools`), so adjust the `ln` source to match.
 
-On Arch there is an AUR package, [open-vm-tools-clipway](https://aur.archlinux.org/packages/open-vm-tools-clipway), maintained by someone else.
+With 13.1.0, `configure` picks GTK4 whenever it is installed and then requires `gtkmm-4.0`. Install that or pass `--without-gtk4`.
+
+To start the daemon with your session, install [`contrib/clipway.service`](contrib/clipway.service) as a user unit:
+
+```sh
+install -Dm644 contrib/clipway.service ~/.config/systemd/user/clipway.service
+systemctl --user enable --now clipway.service
+```
+
+It does what the NixOS module does: it is bound to `graphical-session.target`, only starts when `WAYLAND_DISPLAY` is set, and loads `dndcp` alone. Adjust the `vmtoolsd` path in `ExecStart` if yours is elsewhere. If your desktop runs XDG autostart entries (KDE Plasma), also hide the packaged `vmware-user.desktop` by putting a copy with `Hidden=true` in `~/.config/autostart/`, or a second, stock daemon starts next to it.
+
+On Arch there is an AUR package, [open-vm-tools-clipway](https://aur.archlinux.org/packages/open-vm-tools-clipway), maintained by someone else. As of [#7](https://github.com/krisztianfekete/clipway/issues/7) it ships the first revision of the patch and does not pass `--without-gtk4`, so swap in the current patch from this repo and add the flag if the build fails.
 
 ## Limitations
 
@@ -68,8 +79,10 @@ On Arch there is an AUR package, [open-vm-tools-clipway](https://aur.archlinux.o
 ## Tested on
 
 - **By the maintainer:** NixOS 26.05, `open-vm-tools` 13.0.5 and 13.1.0, Sway 1.12 / wlroots 0.20, `wl-clipboard` 2.3.0, VMware Fusion Professional 25H2 on aarch64.
-- **Reported by users:** KDE Plasma 6.7 and niri on NixOS 26.05 ([#6](https://github.com/krisztianfekete/clipway/issues/6)).
-- **Should work, untested:** Hyprland, river and other compositors with data-control support, and VMware products other than Fusion.
+- **Reported by users:**
+  - KDE Plasma 6.7 and niri on NixOS 26.05 ([#6](https://github.com/krisztianfekete/clipway/issues/6)).
+  - niri 26.04 on Arch Linux x86_64, `open-vm-tools` 13.1.0 from the AUR package with the current patch, `wl-clipboard` 2.3.0, VMware Workstation 16.2.3 Pro on a Windows 10 host ([#7](https://github.com/krisztianfekete/clipway/issues/7)).
+- **Should work, untested:** Hyprland, river and other compositors with data-control support, and VMware products other than Fusion and Workstation.
 
 If you run it somewhere not listed, an issue saying so (working or not) helps.
 

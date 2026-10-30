@@ -1,0 +1,20 @@
+# systemd --user unit for distros without the NixOS module. Mirrors module.nix:
+# starts with the graphical session, stays out of X11 sessions, and loads dndcp
+# alone with DISPLAY unset. ~/.local/lib/clipway must hold only a symlink to
+# libdndcp.so (see the README). Adjust the vmtoolsd path if yours differs.
+[Unit]
+Description=clipway: open-vm-tools desktop daemon (Wayland clipboard backend)
+After=graphical-session.target
+PartOf=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+Type=simple
+Environment=XDG_SESSION_TYPE=wayland
+UnsetEnvironment=DISPLAY
+ExecStart=/usr/bin/vmtoolsd -n vmusr --plugin-path %h/.local/lib/clipway
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
